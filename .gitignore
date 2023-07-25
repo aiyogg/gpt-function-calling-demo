@@ -64,5 +64,5 @@ typings/
 *.swp
 *.lock
 *.DS_Store
-*.Spotlight-V100
-*.Trashes
+
+dist
