@@ -5,6 +5,8 @@ import {
   Configuration,
   OpenAIApi,
 } from 'openai'
+import { z } from 'zod'
+import { zodToJsonSchema } from 'zod-to-json-schema'
 
 config()
 
@@ -23,41 +25,85 @@ const main = async () => {
   }[] = [
     {
       role: 'user',
-      content: 'What is the weather like in San Francisco?',
+      content: '请问夏威夷的天气怎么样？',
     },
   ]
 
-  const functionsSchema = [
-    {
-      name: 'get_current_weather',
-      description: 'Get the current weather',
-      parameters: {
-        type: 'object',
-        properties: {
-          location: {
-            type: 'string',
-            description: 'The city and state, e.g. San Francisco, CA',
-          },
-          format: {
-            type: 'string',
-            enum: ['celsius', 'fahrenheit'],
-            description:
-              'The temperature unit to use. Infer this from the users location.',
-          },
-        },
-        required: ['location', 'format'],
-      },
-    },
-  ]
+  const paramsSchema = z.object({
+    location: z.string().describe('The city and state, e.g. San Francisco, CA'),
+    langCode: z
+      .enum([
+        'ar',
+        'bn',
+        'bg',
+        'zh',
+        'zh_tw',
+        'cs',
+        'da',
+        'nl',
+        'fi',
+        'fr',
+        'de',
+        'el',
+        'hi',
+        'hu',
+        'it',
+        'ja',
+        'jv',
+        'ko',
+        'zh_cmn',
+        'mr',
+        'pl',
+        'pt',
+        'pa',
+        'ro',
+        'ru',
+        'sr',
+        'si',
+        'sk',
+        'es',
+        'sv',
+        'ta',
+        'te',
+        'tr',
+        'uk',
+        'ur',
+        'vi',
+        'zh_wuu',
+        'zh_hsn',
+        'zh_yue',
+        'zu',
+      ])
+      .describe(
+        'The langues code to use for the weather description, e.g. en, es, zh. Its according to users language preference.'
+      ),
+  })
+  const params = zodToJsonSchema(paramsSchema)
+
+  const functionSchema = {
+    name: 'get_current_weather',
+    description: 'Get the current weather',
+    parameters: params,
+  }
 
   interface FunctionMap {
     [key: string]: (args: any) => Promise<any>
   }
 
   const functions: FunctionMap = {
-    get_current_weather: async (args: { location: string; format: string }) => {
-      // call weather api
-      return `the ${args.location} is 75 ${args.format} and sunny`
+    get_current_weather: async ({
+      location,
+      langCode,
+    }: z.infer<typeof paramsSchema>) => {
+      const res = await fetch(
+        `http://api.weatherapi.com/v1/current.json?key=${process.env.WEATHER_API_KEY}&q=${location}&lang=${langCode}`
+      )
+        .then((res) => res.json())
+        .catch((err) => {
+          console.log(err)
+          return null
+        })
+      return res?.current ?? 'No weather data found'
     },
   }
 
@@ -65,7 +111,7 @@ const main = async () => {
     const response = await openai.createChatCompletion({
       model: 'gpt-3.5-turbo-16k',
       messages,
-      functions: functionsSchema,
+      functions: [functionSchema],
       temperature: 0,
     })
 
